@@ -27,17 +27,19 @@ spinner() {
 banner() {
   echo -ne "${BLU}"
   for frame in "🔍" "🔎" "🛰️" "🕵️" "📡" "🔍"; do
-    printf "\r${WHT}Loading ${frame} Subdomain Enumeration Tool...${NC}"
+    printf "\r${WHT}Loading ${frame} FindSubDs...${NC}"
     sleep 0.2
   done
   echo -e "\n${BLU}"
   echo "╔═══════════════════════════════════════════════╗"
-  echo "║         🔍 Subdomain Enumeration Tool         ║"
+  echo "║               🔍 FindSubDs Tool               ║"
+  echo "╠═══════════════════════════════════════════════╣"
+  echo "║     Created with 💻 by ${MAG}Crypt Specter${BLU}             ║"
   echo "╚═══════════════════════════════════════════════╝"
   echo -e "${NC}"
 }
 
-# Stage header with color flicker
+# Stage header
 stage() {
   echo -e "\n${CYN}╔════════════════════════════════════╗"
   echo -e   "║ 🔧 ${WHT}${1}${CYN}"
