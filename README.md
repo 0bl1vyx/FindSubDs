@@ -28,6 +28,12 @@ Make sure the following tools are installed and in your `$PATH`:
 - [dnsx](https://github.com/projectdiscovery/dnsx)  
 - [httpx](https://github.com/projectdiscovery/httpx)  
 
+```bash
+sudo apt install -y subfinder sublist3r amass assetfinder dnsx
+
+go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+```
+
 ---
 
 ## Usage
@@ -69,7 +75,7 @@ MIT License — feel free to use and modify.
 
 ## Author
 
-[Priyo](https://github.com/your-github-username) — Ethical Hacker & Bug Bounty Hunter
+[Priyo](https://github.com/cryptspecter) — Ethical Hacker & Bug Bounty Hunter
 
 ---
 
