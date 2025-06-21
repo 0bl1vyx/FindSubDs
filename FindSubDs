@@ -34,7 +34,7 @@ banner() {
   echo "╔═══════════════════════════════════════════════╗"
   echo "║               🔍 FindSubDs Tool               ║"
   echo "╠═══════════════════════════════════════════════╣"
-  echo "║     Created with 💻 by ${MAG}Crypt Specter${BLU}             ║"
+  echo -e "║     Created with 💻 by ${MAG}Crypt Specter${BLU}             ║"
   echo "╚═══════════════════════════════════════════════╝"
   echo -e "${NC}"
 }
