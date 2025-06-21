@@ -10,15 +10,25 @@ MAG='\033[1;35m'
 WHT='\033[1;37m'
 NC='\033[0m' # No Color
 
-# Spinner animation
-spinner() {
-    local pid=$!
+# Spinner with minute notifier
+spinner_with_updates() {
+    local pid=$1
+    local name=$2
     local spin=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-    i=0
-    while kill -0 $pid 2>/dev/null; do
+    local i=0
+    local elapsed=0
+    local interval=60
+    local messages=("Still working on it..." "Almost there..." "Just a little more patience..." "Finalizing..." "Hang tight...")
+
+    while kill -0 "$pid" 2>/dev/null; do
         i=$(( (i+1) %10 ))
-        printf "\r${MAG}${spin[$i]}${NC} Working... "
-        sleep 0.1
+        printf "\r${MAG}${spin[$i]}${NC} Working on ${name}... "
+        sleep 1
+        elapsed=$((elapsed + 1))
+        if (( elapsed % interval == 0 )); then
+            msg_index=$(( (elapsed / interval - 1) % ${#messages[@]} ))
+            echo -e "\n${YLW}[⏳ ${elapsed}s] ${messages[$msg_index]}${NC}"
+        fi
     done
     printf "\r"
 }
@@ -59,7 +69,7 @@ summary() {
   echo -e   "╚═══════════════════════════════════════════════╝${NC}\n"
 }
 
-# Argument parsing
+# Parse arguments
 while getopts "d:o:" opt; do
   case $opt in
     d) DOMAIN=$OPTARG ;;
@@ -74,21 +84,18 @@ if [[ -z "$DOMAIN" || -z "$OUTPUT" ]]; then
   exit 1
 fi
 
-# Show Banner
 clear
 banner
 sleep 0.3
 
-# Target Info
 echo -e "${YLW}📡 Target domain:${NC} $DOMAIN"
 echo -e "${YLW}🗂️  Output file: ${NC} $OUTPUT"
-echo -e "${CYN}Initializing modules..." && sleep 0.5
+echo -e "${CYN}Initializing modules...${NC}" && sleep 0.5
 echo -ne "${MAG}Countdown to launch: " && for i in {3..1}; do printf "${WHT}$i " && sleep 1; done
 echo -e "\n${NC}"
 
 # Temp files
 SUBF=$(mktemp)
-AMASS_RAW=$(mktemp)
 AMASS=$(mktemp)
 ASSET=$(mktemp)
 SUBL=$(mktemp)
@@ -96,44 +103,50 @@ RESOLVED=$(mktemp)
 
 # subfinder
 stage "Running subfinder..."
-(subfinder -d "$DOMAIN" -all -silent -o "$SUBF" > /dev/null 2>&1) & spinner
+(subfinder -d "$DOMAIN" -all -silent -o "$SUBF" > /dev/null 2>&1) &
+spinner_with_updates $! "subfinder"
 echo -e "${GRN}[✔] subfinder complete!${NC}"
 
-# amass
-stage "Running amass (active)..."
-(amass enum -d "$DOMAIN" -active -o "$AMASS_RAW" > /dev/null 2>&1) & spinner
-grep -oE "([a-zA-Z0-9_-]+\.)+$DOMAIN" "$AMASS_RAW" | sort -u > "$AMASS"
+# amass combined (passive + active)
+stage "Running amass (combined mode)..."
+(amass enum -d "$DOMAIN" -o "$AMASS" > /dev/null 2>&1) &
+spinner_with_updates $! "amass"
 echo -e "${GRN}[✔] amass complete!${NC}"
 
 # assetfinder
 stage "Running assetfinder..."
-(assetfinder --subs-only "$DOMAIN" > "$ASSET" 2>/dev/null) & spinner
+(assetfinder --subs-only "$DOMAIN" > "$ASSET" 2>/dev/null) &
+spinner_with_updates $! "assetfinder"
 echo -e "${GRN}[✔] assetfinder complete!${NC}"
 
 # sublist3r
 stage "Running sublist3r..."
-(sublist3r -d "$DOMAIN" -o "$SUBL" > /dev/null 2>&1) & spinner
+(sublist3r -d "$DOMAIN" -o "$SUBL" > /dev/null 2>&1) &
+spinner_with_updates $! "sublist3r"
 echo -e "${GRN}[✔] sublist3r complete!${NC}"
 
 # Merge and dedupe
 stage "Merging & deduplicating results..."
-(cat "$SUBF" "$AMASS" "$ASSET" "$SUBL" | sort -u > "$OUTPUT") & spinner
+(cat "$SUBF" "$AMASS" "$ASSET" "$SUBL" | sort -u > "$OUTPUT") &
+spinner_with_updates $! "merge"
 echo -e "${GRN}[✔] All results merged successfully!${NC}"
 
 # dnsx resolution
 stage "Resolving subdomains with dnsx..."
-(dnsx -l "$OUTPUT" -silent -o "$RESOLVED" > /dev/null 2>&1) & spinner
+(dnsx -l "$OUTPUT" -silent -o "$RESOLVED" > /dev/null 2>&1) &
+spinner_with_updates $! "dnsx"
 echo -e "${GRN}[✔] Resolution complete!${NC}"
 
 # httpx live check
 stage "Checking live subdomains with httpx..."
-(httpx -l "$RESOLVED" -silent -o live_subs.txt > /dev/null 2>&1) & spinner
+(httpx -l "$RESOLVED" -silent -o live_subs.txt > /dev/null 2>&1) &
+spinner_with_updates $! "httpx"
 echo -e "${GRN}[✔] Live check complete!${NC}"
 
 # Cleanup
-rm -f "$SUBF" "$AMASS_RAW" "$AMASS" "$ASSET" "$SUBL" "$RESOLVED"
+rm -f "$SUBF" "$AMASS" "$ASSET" "$SUBL" "$RESOLVED"
 
-# Final output
+# Final summary
 total=$(wc -l < "$OUTPUT")
 live=$(wc -l < live_subs.txt)
 summary "$total" "$live" "$OUTPUT"
