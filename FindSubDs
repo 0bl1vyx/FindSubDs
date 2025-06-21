@@ -10,7 +10,15 @@ MAG='\033[1;35m'
 WHT='\033[1;37m'
 NC='\033[0m' # No Color
 
-# Spinner with minute notifier
+# Tool Check
+for tool in subfinder assetfinder sublist3r dnsx httpx; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo -e "${RED}[✘] Tool missing: ${tool}. Install it first.${NC}"
+    exit 1
+  fi
+done
+
+# Spinner with updates
 spinner_with_updates() {
     local pid=$1
     local name=$2
@@ -33,7 +41,7 @@ spinner_with_updates() {
     printf "\r"
 }
 
-# Banner animation
+# Banner
 banner() {
   echo -ne "${BLU}"
   for frame in "🔍" "🔎" "🛰️" "🕵️" "📡" "🔍"; do
@@ -49,7 +57,7 @@ banner() {
   echo -e "${NC}"
 }
 
-# Stage header
+# Stage
 stage() {
   echo -e "\n${CYN}╔════════════════════════════════════╗"
   echo -e   "║ 🔧 ${WHT}${1}${CYN}"
@@ -59,44 +67,57 @@ stage() {
   done
 }
 
-# Final Summary
+# Summary
 summary() {
   echo -e "\n${GRN}╔═══════════════════════════════════════════════╗"
   echo -e   "║ 🎉 Subdomain enumeration complete!"
   echo -e   "║ 📦 Total subdomains: ${CYN}$1${GRN}"
   echo -e   "║ 🌐 Live subdomains: ${CYN}$2${GRN}"
-  echo -e   "║ 💾 Files saved: ${YLW}$3${GRN}, live_subs.txt"
+  echo -e   "║ 💾 Files saved: ${YLW}$3${GRN}, $LIVEOUT"
   echo -e   "╚═══════════════════════════════════════════════╝${NC}\n"
 }
 
-# Parse arguments
-while getopts "d:o:" opt; do
+# Parse args
+while getopts "d:o:l:" opt; do
   case $opt in
     d) DOMAIN=$OPTARG ;;
     o) OUTPUT=$OPTARG ;;
-    *) echo -e "${RED}[!] Usage: $0 -d domain.com -o output.txt${NC}" && exit 1 ;;
+    l) LIVEOUT=$OPTARG ;;
+    *) echo -e "${RED}[!] Usage: $0 -d domain.com -o output.txt [-l live_output.txt]${NC}" && exit 1 ;;
   esac
 done
 
 if [[ -z "$DOMAIN" || -z "$OUTPUT" ]]; then
   echo -e "${RED}[!] Missing arguments!${NC}"
-  echo "Usage: $0 -d domain.com -o output.txt"
+  echo "Usage: $0 -d domain.com -o output.txt [-l live_output.txt]"
   exit 1
+fi
+
+# Default live output
+: "${LIVEOUT:=live_subs.txt}"
+
+# Overwrite warning
+if [[ -f "$OUTPUT" || -f "$LIVEOUT" ]]; then
+  echo -e "${YLW}[!] Output file(s) already exist. Overwrite? [y/N]${NC}"
+  read -r confirm
+  if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
+    echo -e "${RED}[✘] Operation aborted by user.${NC}"
+    exit 1
+  fi
 fi
 
 clear
 banner
 sleep 0.3
-
 echo -e "${YLW}📡 Target domain:${NC} $DOMAIN"
 echo -e "${YLW}🗂️  Output file: ${NC} $OUTPUT"
+echo -e "${YLW}🌐 Live output : ${NC} $LIVEOUT"
 echo -e "${CYN}Initializing modules...${NC}" && sleep 0.5
 echo -ne "${MAG}Countdown to launch: " && for i in {3..1}; do printf "${WHT}$i " && sleep 1; done
 echo -e "\n${NC}"
 
 # Temp files
 SUBF=$(mktemp)
-AMASS=$(mktemp)
 ASSET=$(mktemp)
 SUBL=$(mktemp)
 RESOLVED=$(mktemp)
@@ -106,12 +127,6 @@ stage "Running subfinder..."
 (subfinder -d "$DOMAIN" -all -silent -o "$SUBF" > /dev/null 2>&1) &
 spinner_with_updates $! "subfinder"
 echo -e "${GRN}[✔] subfinder complete!${NC}"
-
-# amass combined (passive + active)
-stage "Running amass (combined mode)..."
-(amass enum -d "$DOMAIN" -o "$AMASS" > /dev/null 2>&1) &
-spinner_with_updates $! "amass"
-echo -e "${GRN}[✔] amass complete!${NC}"
 
 # assetfinder
 stage "Running assetfinder..."
@@ -125,28 +140,28 @@ stage "Running sublist3r..."
 spinner_with_updates $! "sublist3r"
 echo -e "${GRN}[✔] sublist3r complete!${NC}"
 
-# Merge and dedupe
+# merge & dedupe
 stage "Merging & deduplicating results..."
-(cat "$SUBF" "$AMASS" "$ASSET" "$SUBL" | sort -u > "$OUTPUT") &
+(cat "$SUBF" "$ASSET" "$SUBL" | sort -u > "$OUTPUT") &
 spinner_with_updates $! "merge"
 echo -e "${GRN}[✔] All results merged successfully!${NC}"
 
-# dnsx resolution
+# dnsx
 stage "Resolving subdomains with dnsx..."
 (dnsx -l "$OUTPUT" -silent -o "$RESOLVED" > /dev/null 2>&1) &
 spinner_with_updates $! "dnsx"
 echo -e "${GRN}[✔] Resolution complete!${NC}"
 
-# httpx live check
+# httpx
 stage "Checking live subdomains with httpx..."
-(httpx -l "$RESOLVED" -silent -o live_subs.txt > /dev/null 2>&1) &
+(httpx -l "$RESOLVED" -silent -o "$LIVEOUT" > /dev/null 2>&1) &
 spinner_with_updates $! "httpx"
 echo -e "${GRN}[✔] Live check complete!${NC}"
 
 # Cleanup
-rm -f "$SUBF" "$AMASS" "$ASSET" "$SUBL" "$RESOLVED"
+rm -f "$SUBF" "$ASSET" "$SUBL" "$RESOLVED"
 
 # Final summary
 total=$(wc -l < "$OUTPUT")
-live=$(wc -l < live_subs.txt)
+live=$(wc -l < "$LIVEOUT")
 summary "$total" "$live" "$OUTPUT"
