@@ -33,6 +33,8 @@ Make sure the following tools are installed and in your `$PATH`:
 ## Usage
 
 ```bash
+git clone https://github.com/cryptspecter/FindSubDs.git
+cd FindSubDs
 chmod +x FindSubDs
 ./FindSubDs -d example.com -o subdomains.txt
 ```
