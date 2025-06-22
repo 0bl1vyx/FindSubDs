@@ -1,41 +1,44 @@
-# FindSubDs
+# 🔍 FindSubDs
 
-A powerful and user-friendly **Subdomain Enumeration Tool** that combines multiple popular OSINT tools — `subfinder`, `assetfinder`, and `sublist3r` — to maximize subdomain discovery. It further resolves subdomains using `dnsx` and identifies live hosts using `httpx`.
-
----
-
-## Features
-
-- Aggregates subdomains from multiple tools for maximum coverage  
-- Filters and deduplicates subdomains automatically  
-- Resolves subdomains to valid hosts via `dnsx`  
-- Identifies live HTTP/S hosts via `httpx`  
-- Interactive and colorful CLI with spinners, banners, and stage indicators  
-- Outputs two files:
-  - All unique subdomains (user-defined output file)  
-  - Live subdomains (`live_subs.txt`)  
+A powerful and user-friendly **Subdomain Enumeration Tool** built for OSINT-based recon, combining multiple top subdomain discovery engines like `subfinder`, `assetfinder`, `sublist3r`, `crt.sh`, and `findomain`. It resolves subdomains using `dnsx` and detects live web hosts via `httpx`. Enhanced with animated CLI banners, spinners, and detailed stage indicators.
 
 ---
 
-## Prerequisites
+## 🚀 Features
 
-Make sure the following tools are installed and in your `$PATH`:
+- 🔗 Aggregates results from 5 powerful sources:
+  - `subfinder`, `assetfinder`, `sublist3r`
+  - Certificate transparency logs via `crt.sh`
+  - Passive DNS via `findomain`
+- 📦 Automatically deduplicates and cleans results
+- 🌐 Resolves domains via `dnsx`
+- 🔎 Checks for live HTTP/S endpoints via `httpx`
+- 🎨 Fully interactive and colorful CLI:
+  - Loading spinners for each stage
+  - ASCII banners and countdowns
+- 💾 Generates 2 output files:
+  - All discovered subdomains
+  - Only live & resolved subdomains
 
-- [subfinder](https://github.com/projectdiscovery/subfinder) 
-- [assetfinder](https://github.com/tomnomnom/assetfinder)  
-- [sublist3r](https://github.com/aboul3la/Sublist3r)  
-- [dnsx](https://github.com/projectdiscovery/dnsx)  
-- [httpx](https://github.com/projectdiscovery/httpx)  
+---
+
+## 🛠️ Prerequisites
+
+Install the required tools and dependencies:
 
 ```bash
-sudo apt install -y subfinder sublist3r assetfinder dnsx
+# Install system dependencies
+sudo apt install -y curl jq subfinder sublist3r assetfinder dnsx findomain
 
+# Install Go-based tools
 go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
-```
+````
+
+Ensure all tools are in your `$PATH`.
 
 ---
 
-## Usage
+## ⚙️ Usage
 
 ```bash
 git clone https://github.com/cryptspecter/FindSubDs.git
@@ -45,45 +48,52 @@ chmod +x FindSubDs
 ./FindSubDs -d example.com -o subdomains.txt -l live_subs.txt
 ```
 
-- `-d` — Target domain  
-- `-o` — Output file for all unique discovered subdomains
-- `-l` _ Output file for all live subdomains
+* `-d` — Target domain
+* `-o` — Output file for all discovered subdomains
+* `-l` — Output file for live subdomains
 
 ---
 
-## Output
+## 📂 Output Files
 
-- `subdomains.txt` — All unique subdomains discovered  
-- `live_subs.txt` — Verified live subdomains  
-
----
-
-## Notes
-
-- Requires internet connection to query APIs and resolve hosts  
-- Ensure you have permission to perform reconnaissance on target domains  
-- Run on Linux/macOS terminals with Bash  
+| File             | Description                            |
+| ---------------- | -------------------------------------- |
+| `subdomains.txt` | All unique subdomains found            |
+| `live_subs.txt`  | Subdomains with active HTTP/S services |
 
 ---
 
-## License
+## 🧠 Notes
 
-MIT License — feel free to use and modify.
-
----
-
-## Author
-
-[Priyo](https://github.com/cryptspecter) — Ethical Hacker & Bug Bounty Hunter
+* Internet is required for OSINT and resolution queries.
+* Tool checks ensure all dependencies are present before execution.
+* Best run on Linux/macOS terminals with support for ANSI escape sequences.
 
 ---
 
-## Contribution
+## 📜 License
 
-Pull requests and issues are welcome. Please follow responsible disclosure practices.
+MIT License — use it, modify it, contribute to it.
 
 ---
 
-## Disclaimer
+## 👤 Author
 
-This tool is designed for authorized security testing only. Unauthorized scanning or enumeration of domains may be illegal.
+**[Priyo (Crypt Specter)](https://github.com/cryptspecter)**
+Ethical Hacker & Bug Bounty Hunter
+
+---
+
+## 🤝 Contribution
+
+Pull requests, improvements, bug fixes, and suggestions are welcome!
+Please follow responsible disclosure norms and ethics.
+
+---
+
+## ⚠️ Disclaimer
+
+This tool is built **only for legal and authorized security testing**.
+Unauthorized scanning or probing of systems without consent is **illegal** and unethical.
+
+---
