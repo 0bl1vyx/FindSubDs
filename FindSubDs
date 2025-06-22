@@ -11,7 +11,7 @@ WHT='\033[1;37m'
 NC='\033[0m' # No Color
 
 # Tool Check
-for tool in subfinder assetfinder sublist3r dnsx httpx; do
+for tool in subfinder assetfinder sublist3r dnsx httpx findomain jq curl; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo -e "${RED}[✘] Tool missing: ${tool}. Install it first.${NC}"
     exit 1
@@ -34,7 +34,7 @@ spinner_with_updates() {
     printf "\r$(tput el)"
 }
 
-# Banner (optimized)
+# Banner
 banner() {
   echo -ne "${BLU}"
   for frame in "🔍" "🔎" "🛰️" "🕵️" "📡" "🔍"; do
@@ -109,6 +109,8 @@ echo -e "\n${NC}"
 SUBF=$(mktemp)
 ASSET=$(mktemp)
 SUBL=$(mktemp)
+FINDO=$(mktemp)
+CRT=$(mktemp)
 RESOLVED=$(mktemp)
 
 # Run subfinder
@@ -129,9 +131,26 @@ stage "Running sublist3r..."
 spinner_with_updates $! "sublist3r"
 echo -e "${GRN}[✔] sublist3r complete!${NC}"
 
+# Run crt.sh via curl + jq
+stage "Fetching from crt.sh..."
+(
+curl -s "https://crt.sh/?q=%25.${DOMAIN}&output=json" |
+  jq -r '.[].name_value' |
+  sed 's/\*\.//g' |
+  sort -u > "$CRT"
+) &
+spinner_with_updates $! "crt.sh"
+echo -e "${GRN}[✔] crt.sh complete!${NC}"
+
+# Run findomain
+stage "Running findomain..."
+(findomain -t "$DOMAIN" -q > "$FINDO" 2>/dev/null) &
+spinner_with_updates $! "findomain"
+echo -e "${GRN}[✔] findomain complete!${NC}"
+
 # Merge & dedupe
 stage "Merging & deduplicating results..."
-(cat "$SUBF" "$ASSET" "$SUBL" | sort -u > "$OUTPUT") &
+(cat "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" | sort -u > "$OUTPUT") &
 spinner_with_updates $! "merge"
 echo -e "${GRN}[✔] All results merged successfully!${NC}"
 
@@ -148,7 +167,7 @@ spinner_with_updates $! "httpx"
 echo -e "${GRN}[✔] Live check complete!${NC}"
 
 # Cleanup
-rm -f "$SUBF" "$ASSET" "$SUBL" "$RESOLVED"
+rm -f "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$RESOLVED"
 
 # Summary
 total=$(wc -l < "$OUTPUT")
