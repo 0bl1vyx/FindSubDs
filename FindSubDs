@@ -89,7 +89,7 @@ done
 
 if [[ -z "$DOMAIN" || -z "$OUTPUT" ]]; then
   echo -e "${RED}[!] Missing arguments!${NC}"
-  echo "Usage: $0 -d domain.com -o output.txt [-l live_output.txt]"
+  echo "Usage: $0 -d domain.com -o output.txt -l live_output.txt"
   exit 1
 fi
 
