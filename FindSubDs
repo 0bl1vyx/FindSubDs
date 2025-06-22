@@ -18,35 +18,28 @@ for tool in subfinder assetfinder sublist3r dnsx httpx; do
   fi
 done
 
-# Spinner with updates
+# Spinner (clean + no glitch)
 spinner_with_updates() {
     local pid=$1
     local name=$2
     local spin=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
     local i=0
-    local elapsed=0
-    local interval=60
-    local messages=("Still working on it..." "Almost there..." "Just a little more patience..." "Finalizing..." "Hang tight...")
-
+    tput civis  # Hide cursor
     while kill -0 "$pid" 2>/dev/null; do
-        i=$(( (i+1) %10 ))
-        printf "\r${MAG}${spin[$i]}${NC} Working on ${name}... "
-        sleep 1
-        elapsed=$((elapsed + 1))
-        if (( elapsed % interval == 0 )); then
-            msg_index=$(( (elapsed / interval - 1) % ${#messages[@]} ))
-            echo -e "\n${YLW}[⏳ ${elapsed}s] ${messages[$msg_index]}${NC}"
-        fi
+        printf "\r${MAG}${spin[$i]}${NC} Running ${name}...$(tput el)"
+        i=$(( (i + 1) % 10 ))
+        sleep 0.1
     done
-    printf "\r"
+    tput cnorm  # Show cursor
+    printf "\r$(tput el)"
 }
 
-# Banner
+# Banner (optimized)
 banner() {
   echo -ne "${BLU}"
   for frame in "🔍" "🔎" "🛰️" "🕵️" "📡" "🔍"; do
     printf "\r${WHT}Loading ${frame} FindSubDs...${NC}"
-    sleep 0.2
+    sleep 0.1
   done
   echo -e "\n${BLU}"
   echo "╔═══════════════════════════════════════════════╗"
@@ -57,17 +50,15 @@ banner() {
   echo -e "${NC}"
 }
 
-# Stage
+# Stage title
 stage() {
   echo -e "\n${CYN}╔════════════════════════════════════╗"
   echo -e   "║ 🔧 ${WHT}${1}${CYN}"
   echo -e   "╚════════════════════════════════════╝${NC}"
-  for i in {1..3}; do
-    sleep 0.1 && printf "${MAG}." && sleep 0.1 && printf "${GRN}." && sleep 0.1 && printf "${CYN}.\n${NC}"
-  done
+  printf "${MAG}..." && printf "${GRN}..." && printf "${CYN}...\n${NC}"
 }
 
-# Summary
+# Final summary
 summary() {
   echo -e "\n${GRN}╔═══════════════════════════════════════════════╗"
   echo -e   "║ 🎉 Subdomain enumeration complete!"
@@ -77,24 +68,22 @@ summary() {
   echo -e   "╚═══════════════════════════════════════════════╝${NC}\n"
 }
 
-# Parse args
+# Parse arguments
 while getopts "d:o:l:" opt; do
   case $opt in
     d) DOMAIN=$OPTARG ;;
     o) OUTPUT=$OPTARG ;;
     l) LIVEOUT=$OPTARG ;;
-    *) echo -e "${RED}[!] Usage: $0 -d domain.com -o output.txt [-l live_output.txt]${NC}" && exit 1 ;;
+    *) echo -e "${RED}[!] Usage: $0 -d domain.com -o output.txt -l live_output.txt${NC}" && exit 1 ;;
   esac
 done
 
-if [[ -z "$DOMAIN" || -z "$OUTPUT" ]]; then
-  echo -e "${RED}[!] Missing arguments!${NC}"
+# Required flags check
+if [[ -z "$DOMAIN" || -z "$OUTPUT" || -z "$LIVEOUT" ]]; then
+  echo -e "${RED}[!] Missing required arguments!${NC}"
   echo "Usage: $0 -d domain.com -o output.txt -l live_output.txt"
   exit 1
 fi
-
-# Default live output
-: "${LIVEOUT:=live_subs.txt}"
 
 # Overwrite warning
 if [[ -f "$OUTPUT" || -f "$LIVEOUT" ]]; then
@@ -106,14 +95,14 @@ if [[ -f "$OUTPUT" || -f "$LIVEOUT" ]]; then
   fi
 fi
 
+# UI Intro
 clear
 banner
-sleep 0.3
 echo -e "${YLW}📡 Target domain:${NC} $DOMAIN"
 echo -e "${YLW}🗂️  Output file: ${NC} $OUTPUT"
 echo -e "${YLW}🌐 Live output : ${NC} $LIVEOUT"
-echo -e "${CYN}Initializing modules...${NC}" && sleep 0.5
-echo -ne "${MAG}Countdown to launch: " && for i in {3..1}; do printf "${WHT}$i " && sleep 1; done
+echo -e "${CYN}Initializing modules...${NC}" && sleep 0.3
+echo -ne "${MAG}Countdown to launch: " && for i in {3..1}; do printf "${WHT}$i " && sleep 0.5; done
 echo -e "\n${NC}"
 
 # Temp files
@@ -122,37 +111,37 @@ ASSET=$(mktemp)
 SUBL=$(mktemp)
 RESOLVED=$(mktemp)
 
-# subfinder
+# Run subfinder
 stage "Running subfinder..."
 (subfinder -d "$DOMAIN" -all -silent -o "$SUBF" > /dev/null 2>&1) &
 spinner_with_updates $! "subfinder"
 echo -e "${GRN}[✔] subfinder complete!${NC}"
 
-# assetfinder
+# Run assetfinder
 stage "Running assetfinder..."
 (assetfinder --subs-only "$DOMAIN" > "$ASSET" 2>/dev/null) &
 spinner_with_updates $! "assetfinder"
 echo -e "${GRN}[✔] assetfinder complete!${NC}"
 
-# sublist3r
+# Run sublist3r
 stage "Running sublist3r..."
 (sublist3r -d "$DOMAIN" -o "$SUBL" > /dev/null 2>&1) &
 spinner_with_updates $! "sublist3r"
 echo -e "${GRN}[✔] sublist3r complete!${NC}"
 
-# merge & dedupe
+# Merge & dedupe
 stage "Merging & deduplicating results..."
 (cat "$SUBF" "$ASSET" "$SUBL" | sort -u > "$OUTPUT") &
 spinner_with_updates $! "merge"
 echo -e "${GRN}[✔] All results merged successfully!${NC}"
 
-# dnsx
+# dnsx resolution
 stage "Resolving subdomains with dnsx..."
 (dnsx -l "$OUTPUT" -silent -o "$RESOLVED" > /dev/null 2>&1) &
 spinner_with_updates $! "dnsx"
 echo -e "${GRN}[✔] Resolution complete!${NC}"
 
-# httpx
+# httpx live check
 stage "Checking live subdomains with httpx..."
 (httpx -l "$RESOLVED" -silent -o "$LIVEOUT" > /dev/null 2>&1) &
 spinner_with_updates $! "httpx"
@@ -161,7 +150,7 @@ echo -e "${GRN}[✔] Live check complete!${NC}"
 # Cleanup
 rm -f "$SUBF" "$ASSET" "$SUBL" "$RESOLVED"
 
-# Final summary
+# Summary
 total=$(wc -l < "$OUTPUT")
 live=$(wc -l < "$LIVEOUT")
 summary "$total" "$live" "$OUTPUT"
