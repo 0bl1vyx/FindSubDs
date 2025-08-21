@@ -1,109 +1,101 @@
 #!/bin/bash
 
-# Colors
-RED='\033[0;31m'
-GRN='\033[0;32m'
-YLW='\033[1;33m'
-CYN='\033[0;36m'
-BLU='\033[1;34m'
-MAG='\033[1;35m'
-WHT='\033[1;37m'
-NC='\033[0m' # No Color
+# --- Colors ---
+# Using tput for compatibility and to avoid hardcoded escape sequences
+RED=$(tput setaf 1)
+GRN=$(tput setaf 2)
+YLW=$(tput setaf 3)
+BLU=$(tput setaf 4)
+MAG=$(tput setaf 5)
+CYN=$(tput setaf 6)
+WHT=$(tput setaf 7)
+BOLD=$(tput bold)
+NC=$(tput sgr0) # No Color
 
-# Tool Check
+# --- Tool Check ---
 for tool in subfinder assetfinder sublist3r dnsx httpx findomain jq curl; do
   if ! command -v "$tool" >/dev/null 2>&1; then
-    echo -e "${RED}[✘] Tool missing: ${tool}. Install it first.${NC}"
+    echo -e "${RED}${BOLD}[✘] Tool missing: ${tool}. Install it first.${NC}"
     exit 1
   fi
 done
 
-# Spinner (clean + no glitch)
+# --- UI Functions ---
 spinner_with_updates() {
     local pid=$1
     local name=$2
     local spin=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
     local i=0
-    tput civis  # Hide cursor
+    tput civis
     while kill -0 "$pid" 2>/dev/null; do
-        printf "\r${MAG}${spin[$i]}${NC} Running ${name}...$(tput el)"
+        printf "\r${MAG}${spin[$i]}${NC} ${BOLD}${name}...${NC}"
         i=$(( (i + 1) % 10 ))
         sleep 0.1
     done
-    tput cnorm  # Show cursor
-    printf "\r$(tput el)"
+    printf "\r$(tput el)" # Clear the line
+    tput cnorm
 }
 
-# Banner
 banner() {
-  echo -ne "${BLU}"
-  for frame in "🔍" "🔎" "🛰️" "🕵️" "📡" "🔍"; do
-    printf "\r${WHT}Loading ${frame} FindSubDs...${NC}"
-    sleep 0.1
-  done
-  echo -e "\n${BLU}"
-  echo "╔═══════════════════════════════════════════════╗"
-  echo "║               🔍 FindSubDs Tool               ║"
-  echo "╠═══════════════════════════════════════════════╣"
-  echo -e "║     Created with 💻 by ${MAG}Crypt Specter${BLU}             ║"
-  echo "╚═══════════════════════════════════════════════╝"
-  echo -e "${NC}"
+    echo -e "${BLU}${BOLD}"
+    echo '    ┌─┐┬ ┬┌┐ ┌─┐┌┬┐┌─┐┌─┐┌─┐'
+    echo '    ├─┤└┬┘├┴┐└─┐ │ ├─┘┌─┘┌─┘'
+    echo '    ┴ ┴ ┴ └─┘└─┘ ┴ ┴  └─┘└─┘ v2.0'
+    echo -e "          ${NC}${CYN}by Crypt Specter${NC}"
 }
 
-# Stage title
 stage() {
-  echo -e "\n${CYN}╔════════════════════════════════════╗"
-  echo -e   "║ 🔧 ${WHT}${1}${CYN}"
-  echo -e   "╚════════════════════════════════════╝${NC}"
-  printf "${MAG}..." && printf "${GRN}..." && printf "${CYN}...\n${NC}"
+    echo -e "\n${BLU}${BOLD}[ ${WHT}⚙️  ${BLU}] ${WHT}${1}${NC}"
 }
 
-# Final summary
 summary() {
-  echo -e "\n${GRN}╔═══════════════════════════════════════════════╗"
-  echo -e   "║ 🎉 Subdomain enumeration complete!"
-  echo -e   "║ 📦 Total subdomains: ${CYN}$1${GRN}"
-  echo -e   "║ 🌐 Live subdomains: ${CYN}$2${GRN}"
-  echo -e   "║ 💾 Files saved: ${YLW}$3${GRN}, $LIVEOUT"
-  echo -e   "╚═══════════════════════════════════════════════╝${NC}\n"
+    local total_subs=$1
+    local live_subs=$2
+    local output_file=$3
+    local duration=$4
+
+    echo -e "\n${GRN}${BOLD}╭───────────────────────────────────────────────────╮${NC}"
+    echo -e "${GRN}${BOLD}│${NC}                ${WHT}🎉 Scan Summary 🎉${NC}                ${GRN}${BOLD}│${NC}"
+    echo -e "${GRN}${BOLD}├───────────────────────────────────────────────────┤${NC}"
+    echo -e "${GRN}${BOLD}│${NC} ${CYN}⏱️  Run time:${NC}        ${WHT}${duration} seconds${NC}"
+    echo -e "${GRN}${BOLD}│${NC} ${CYN}📦 Total subdomains:${NC} ${WHT}${total_subs}${NC}"
+    echo -e "${GRN}${BOLD}│${NC} ${CYN}🌐 Live subdomains:${NC}  ${WHT}${live_subs}${NC}"
+    echo -e "${GRN}${BOLD}│${NC} ${CYN}💾 Output files:${NC}      ${YLW}${output_file}, ${LIVEOUT}${NC}"
+    echo -e "${GRN}${BOLD}╰───────────────────────────────────────────────────╯${NC}\n"
 }
 
-# Parse arguments
+# --- Argument Parsing ---
 while getopts "d:o:l:" opt; do
   case $opt in
     d) DOMAIN=$OPTARG ;;
     o) OUTPUT=$OPTARG ;;
     l) LIVEOUT=$OPTARG ;;
-    *) echo -e "${RED}[!] Usage: $0 -d domain.com -o output.txt -l live_output.txt${NC}" && exit 1 ;;
+    *) echo -e "${RED}${BOLD}[!] Usage: $0 -d domain.com -o output.txt -l live_output.txt${NC}" && exit 1 ;;
   esac
 done
 
-# Required flags check
 if [[ -z "$DOMAIN" || -z "$OUTPUT" || -z "$LIVEOUT" ]]; then
-  echo -e "${RED}[!] Missing required arguments!${NC}"
+  echo -e "${RED}${BOLD}[!] Missing required arguments!${NC}"
   echo "Usage: $0 -d domain.com -o output.txt -l live_output.txt"
   exit 1
 fi
 
-# Overwrite warning
 if [[ -f "$OUTPUT" || -f "$LIVEOUT" ]]; then
-  echo -e "${YLW}[!] Output file(s) already exist. Overwrite? [y/N]${NC}"
+  echo -e "${YLW}${BOLD}[!] Output file(s) already exist. Overwrite? [y/N]${NC}"
   read -r confirm
   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-    echo -e "${RED}[✘] Operation aborted by user.${NC}"
+    echo -e "${RED}${BOLD}[✘] Operation aborted by user.${NC}"
     exit 1
   fi
 fi
 
-# UI Intro
+# --- Main Execution ---
+start_time=$SECONDS
 clear
 banner
-echo -e "${YLW}📡 Target domain:${NC} $DOMAIN"
-echo -e "${YLW}🗂️  Output file: ${NC} $OUTPUT"
-echo -e "${YLW}🌐 Live output : ${NC} $LIVEOUT"
-echo -e "${CYN}Initializing modules...${NC}" && sleep 0.3
-echo -ne "${MAG}Countdown to launch: " && for i in {3..1}; do printf "${WHT}$i " && sleep 0.5; done
-echo -e "\n${NC}"
+
+echo -e "\n${WHT}${BOLD}TARGET:${NC} ${YLW}$DOMAIN${NC}"
+echo -e "${WHT}${BOLD}OUTPUT:${NC} ${YLW}$OUTPUT${NC} | ${WHT}${BOLD}LIVE:${NC} ${YLW}$LIVEOUT${NC}"
 
 # Temp files
 SUBF=$(mktemp)
@@ -111,65 +103,51 @@ ASSET=$(mktemp)
 SUBL=$(mktemp)
 FINDO=$(mktemp)
 CRT=$(mktemp)
+WARCH=$(mktemp)
 RESOLVED=$(mktemp)
 
-# Run subfinder
-stage "Running subfinder..."
-(subfinder -d "$DOMAIN" -all -silent -o "$SUBF" > /dev/null 2>&1) &
-spinner_with_updates $! "subfinder"
-echo -e "${GRN}[✔] subfinder complete!${NC}"
+trap 'rm -f "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$WARCH" "$RESOLVED"; tput cnorm' EXIT
 
-# Run assetfinder
-stage "Running assetfinder..."
-(assetfinder --subs-only "$DOMAIN" > "$ASSET" 2>/dev/null) &
-spinner_with_updates $! "assetfinder"
-echo -e "${GRN}[✔] assetfinder complete!${NC}"
-
-# Run sublist3r
-stage "Running sublist3r..."
-(sublist3r -d "$DOMAIN" -o "$SUBL" > /dev/null 2>&1) &
-spinner_with_updates $! "sublist3r"
-echo -e "${GRN}[✔] sublist3r complete!${NC}"
-
-# Run crt.sh via curl + jq
-stage "Fetching from crt.sh..."
+stage "Running enumeration tools in parallel"
 (
-curl -s "https://crt.sh/?q=%25.${DOMAIN}&output=json" |
-  jq -r '.[].name_value' |
-  sed 's/\*\.//g' |
-  sort -u > "$CRT"
+  subfinder -d "$DOMAIN" -all -silent -o "$SUBF" > /dev/null 2>&1 &
+  assetfinder --subs-only "$DOMAIN" > "$ASSET" 2>/dev/null &
+  sublist3r -d "$DOMAIN" -o "$SUBL" > /dev/null 2>&1 &
+  curl -s "https://crt.sh/?q=%25.${DOMAIN}&output=json" | jq -r '.[].name_value' 2>/dev/null | sed 's/\*\.//g' | sort -u > "$CRT" &
+  findomain -t "$DOMAIN" -q > "$FINDO" 2>/dev/null &
+  curl -s "http://web.archive.org/cdx/search/cdx?url=*.${DOMAIN}/*&output=text&fl=original&collapse=urlkey" | sed -e 's_https*://__' -e "s/\/.*//" -e 's/:.*//' -e 's/^www\.//' | sort -u > "$WARCH" &
+  wait
 ) &
-spinner_with_updates $! "crt.sh"
-echo -e "${GRN}[✔] crt.sh complete!${NC}"
+spinner_with_updates $! "Parallel Enumeration"
+echo -e "${GRN}${BOLD}└── Done.${NC}"
 
-# Run findomain
-stage "Running findomain..."
-(findomain -t "$DOMAIN" -q > "$FINDO" 2>/dev/null) &
-spinner_with_updates $! "findomain"
-echo -e "${GRN}[✔] findomain complete!${NC}"
+# --- UX IMPROVEMENT: Tree-style progress report ---
+echo -e "${CYN}${BOLD}   Individual Tool Results:${NC}"
+declare -A sources
+sources["$SUBF"]="Subfinder"
+sources["$ASSET"]="Assetfinder"
+sources["$SUBL"]="Sublist3r"
+sources["$CRT"]="crt.sh"
+sources["$FINDO"]="Findomain"
+sources["$WARCH"]="Web Archive"
+for file in "${!sources[@]}"; do
+    if [[ -s "$file" ]]; then
+        count=$(wc -l < "$file" | tr -d ' ')
+        printf "   ${BLU}├── ${WHT}%-15s${NC}: %s results\n" "${sources[$file]}" "$count"
+    fi
+done
 
-# Merge & dedupe
-stage "Merging & deduplicating results..."
-(cat "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" | sort -u > "$OUTPUT") &
-spinner_with_updates $! "merge"
-echo -e "${GRN}[✔] All results merged successfully!${NC}"
-
-# dnsx resolution
-stage "Resolving subdomains with dnsx..."
+stage "Merging, resolving, and checking live hosts"
+(cat "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$WARCH" | sort -u > "$OUTPUT") &
+spinner_with_updates $! "Merging results"
 (dnsx -l "$OUTPUT" -silent -o "$RESOLVED" > /dev/null 2>&1) &
-spinner_with_updates $! "dnsx"
-echo -e "${GRN}[✔] Resolution complete!${NC}"
-
-# httpx live check
-stage "Checking live subdomains with httpx..."
+spinner_with_updates $! "Resolving domains"
 (httpx -l "$RESOLVED" -silent -o "$LIVEOUT" > /dev/null 2>&1) &
-spinner_with_updates $! "httpx"
-echo -e "${GRN}[✔] Live check complete!${NC}"
+spinner_with_updates $! "Checking live hosts"
+echo -e "${GRN}${BOLD}└── Done.${NC}"
 
-# Cleanup
-rm -f "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$RESOLVED"
-
-# Summary
-total=$(wc -l < "$OUTPUT")
-live=$(wc -l < "$LIVEOUT")
-summary "$total" "$live" "$OUTPUT"
+# --- Summary ---
+total=$(wc -l < "$OUTPUT" | tr -d ' ')
+live=$(wc -l < "$LIVEOUT" | tr -d ' ')
+duration=$(( SECONDS - start_time ))
+summary "$total" "$live" "$OUTPUT" "$duration"
