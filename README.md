@@ -1,7 +1,5 @@
 # 🔍 FindSubDs - The Ultimate Subdomain Enumerator
 
-![FindSubDs in Action](https://i.imgur.com/8zY5v2J.gif)
-
 **FindSubDs** is a powerful and lightning-fast Bash script that automates the process of subdomain enumeration. It intelligently orchestrates a suite of the best open-source tools to discover, resolve, and verify subdomains, presenting the results in a clean, user-friendly interface.
 
 This tool was designed to be the perfect first step in any reconnaissance workflow for bug bounty hunters, penetration testers, and security researchers.
