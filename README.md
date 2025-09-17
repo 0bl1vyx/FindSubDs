@@ -24,8 +24,7 @@ FindSubDs is a Bash script and doesn't require compilation, but you need to inst
 **1. Clone the Repository:**
 
 ```bash
-git clone https://github.com/cryptspecter/FindSubDs
-cd FindSubDs
+wget https://raw.githubusercontent.com/0bl1vyx/FindSubDs/refs/heads/main/FindSubDs
 chmod +x FindSubDs
 ```
 
