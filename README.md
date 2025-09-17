@@ -43,7 +43,7 @@ sudo apt update && sudo apt install -y curl jq subfinder sublist3r assetfinder d
 The `httpx` tool is best installed with `go` to ensure you have the latest version:
 
 ```bash
-go install -v [github.com/projectdiscovery/httpx/cmd/httpx@latest](https://github.com/projectdiscovery/httpx/cmd/httpx@latest)
+go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
 ```
 ---
 
