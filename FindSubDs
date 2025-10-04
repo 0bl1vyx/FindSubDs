@@ -41,7 +41,7 @@ banner() {
     echo '    ┌─┐┬ ┬┌┐ ┌─┐┌┬┐┌─┐┌─┐┌─┐'
     echo '    ├─┤└┬┘├┴┐└─┐ │ ├─┘┌─┘┌─┘'
     echo '    ┴ ┴ ┴ └─┘└─┘ ┴ ┴  └─┘└─┘ v2.0'
-    echo -e "          ${NC}${CYN}by Crypt Specter${NC}"
+    echo -e "          ${NC}${CYN}by 0bl1vyx${NC}"
 }
 
 stage() {
