@@ -12,14 +12,6 @@ WHT=$(tput setaf 7)
 BOLD=$(tput bold)
 NC=$(tput sgr0) # No Color
 
-# --- Tool Check ---
-for tool in subfinder assetfinder sublist3r dnsx httpx findomain jq curl; do
-  if ! command -v "$tool" >/dev/null 2>&1; then
-    echo -e "${RED}${BOLD}[✘] Tool missing: ${tool}. Install it first.${NC}"
-    exit 1
-  fi
-done
-
 # --- UI Functions ---
 spinner_with_updates() {
     local pid=$1
@@ -40,7 +32,7 @@ banner() {
     echo -e "${BLU}${BOLD}"
     echo '    ┌─┐┬ ┬┌┐ ┌─┐┌┬┐┌─┐┌─┐┌─┐'
     echo '    ├─┤└┬┘├┴┐└─┐ │ ├─┘┌─┘┌─┘'
-    echo '    ┴ ┴ ┴ └─┘└─┘ ┴ ┴  └─┘└─┘ v2.0'
+    echo '    ┴ ┴ ┴ └─┘└─┘ ┴ ┴  └─┘└─┘ v2.1'
     echo -e "          ${NC}${CYN}by 0bl1vyx${NC}"
 }
 
@@ -64,22 +56,69 @@ summary() {
     echo -e "${GRN}${BOLD}╰───────────────────────────────────────────────────╯${NC}\n"
 }
 
+usage() {
+    banner
+    echo -e "\n${WHT}A fast, parallel subdomain enumeration script that combines passive and active techniques.${NC}"
+    echo -e "\n${BOLD}USAGE:${NC}"
+    echo -e "  $0 -d <domain> -o <all_subs.txt> -l <live_subs.txt> [OPTIONS]"
+    echo -e "\n${BOLD}REQUIRED ARGUMENTS:${NC}"
+    echo -e "  ${YLW}-d${NC}    Target domain (e.g., example.com)"
+    echo -e "  ${YLW}-o${NC}    Output file for all unique subdomains found"
+    echo -e "  ${YLW}-l${NC}    Output file for live subdomains (responding to HTTP/S)"
+    echo -e "\n${BOLD}OPTIONAL ARGUMENTS (for Brute-Forcing):${NC}"
+    echo -e "  ${YLW}-w${NC}    Path to a wordlist for subdomain brute-forcing with puredns"
+    echo -e "  ${YLW}-r${NC}    Path to a file of valid DNS resolvers for puredns"
+    echo -e "  ${YLW}-h${NC}    Display this help menu and exit"
+    echo -e "\n${BOLD}EXAMPLE:${NC}"
+    echo -e "  ${CYN}$0 -d example.com -o subs.txt -l live.txt -w /path/to/words.txt -r /path/to/resolvers.txt${NC}\n"
+    exit 1
+}
+
+
 # --- Argument Parsing ---
-while getopts "d:o:l:" opt; do
+while getopts "d:o:l:w:r:h" opt; do
   case $opt in
     d) DOMAIN=$OPTARG ;;
     o) OUTPUT=$OPTARG ;;
     l) LIVEOUT=$OPTARG ;;
-    *) echo -e "${RED}${BOLD}[!] Usage: $0 -d domain.com -o output.txt -l live_output.txt${NC}" && exit 1 ;;
+    w) WORDLIST=$OPTARG ;;
+    r) RESOLVERS=$OPTARG ;;
+    h) usage ;;
+    *) usage ;;
   esac
 done
 
+# --- Prerequisite Checks ---
+
+# Check for required tools
+for tool in subfinder assetfinder sublist3r dnsx httpx findomain jq curl puredns; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo -e "${RED}${BOLD}[✘] Tool missing: ${tool}. Please install it first.${NC}"
+    exit 1
+  fi
+done
+
+# Validate required arguments
 if [[ -z "$DOMAIN" || -z "$OUTPUT" || -z "$LIVEOUT" ]]; then
-  echo -e "${RED}${BOLD}[!] Missing required arguments!${NC}"
-  echo "Usage: $0 -d domain.com -o output.txt -l live_output.txt"
-  exit 1
+  usage
 fi
 
+# Validate optional brute-force arguments
+if [[ (-n "$WORDLIST" && -z "$RESOLVERS") || (-z "$WORDLIST" && -n "$RESOLVERS") ]]; then
+    echo -e "${RED}${BOLD}[!] Both -w (wordlist) and -r (resolvers) must be provided together for brute-forcing.${NC}"
+    exit 1
+fi
+if [[ -n "$WORDLIST" && ! -f "$WORDLIST" ]]; then
+    echo -e "${RED}${BOLD}[!] Wordlist file not found: $WORDLIST${NC}"
+    exit 1
+fi
+if [[ -n "$RESOLVERS" && ! -f "$RESOLVERS" ]]; then
+    echo -e "${RED}${BOLD}[!] Resolvers file not found: $RESOLVERS${NC}"
+    exit 1
+fi
+
+
+# Check for existing output files
 if [[ -f "$OUTPUT" || -f "$LIVEOUT" ]]; then
   echo -e "${YLW}${BOLD}[!] Output file(s) already exist. Overwrite? [y/N]${NC}"
   read -r confirm
@@ -96,6 +135,10 @@ banner
 
 echo -e "\n${WHT}${BOLD}TARGET:${NC} ${YLW}$DOMAIN${NC}"
 echo -e "${WHT}${BOLD}OUTPUT:${NC} ${YLW}$OUTPUT${NC} | ${WHT}${BOLD}LIVE:${NC} ${YLW}$LIVEOUT${NC}"
+if [[ -n "$WORDLIST" ]]; then
+    echo -e "${WHT}${BOLD}MODE:${NC}   ${YLW}Passive + Brute-Force${NC}"
+fi
+
 
 # Temp files
 SUBF=$(mktemp)
@@ -104,11 +147,12 @@ SUBL=$(mktemp)
 FINDO=$(mktemp)
 CRT=$(mktemp)
 WARCH=$(mktemp)
+BRUTE=$(mktemp)
 RESOLVED=$(mktemp)
 
-trap 'rm -f "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$WARCH" "$RESOLVED"; tput cnorm' EXIT
+trap 'rm -f "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$WARCH" "$BRUTE" "$RESOLVED"; tput cnorm' EXIT
 
-stage "Running enumeration tools in parallel"
+stage "Running passive enumeration tools in parallel"
 (
   subfinder -d "$DOMAIN" -all -silent -o "$SUBF" > /dev/null 2>&1 &
   assetfinder --subs-only "$DOMAIN" > "$ASSET" 2>/dev/null &
@@ -118,11 +162,20 @@ stage "Running enumeration tools in parallel"
   curl -s "http://web.archive.org/cdx/search/cdx?url=*.${DOMAIN}/*&output=text&fl=original&collapse=urlkey" | sed -e 's_https*://__' -e "s/\/.*//" -e 's/:.*//' -e 's/^www\.//' | sort -u > "$WARCH" &
   wait
 ) &
-spinner_with_updates $! "Parallel Enumeration"
+spinner_with_updates $! "Passive Enumeration"
 echo -e "${GRN}${BOLD}└── Done.${NC}"
 
+# --- Brute-forcing (Optional) ---
+if [[ -n "$WORDLIST" && -n "$RESOLVERS" ]]; then
+  stage "Running puredns for brute-force enumeration"
+  (puredns bruteforce "$WORDLIST" "$DOMAIN" -r "$RESOLVERS" -w "$BRUTE" --quiet >/dev/null 2>&1) &
+  spinner_with_updates $! "Brute-forcing"
+  echo -e "${GRN}${BOLD}└── Done.${NC}"
+fi
+
+
 # --- UX IMPROVEMENT: Tree-style progress report ---
-echo -e "${CYN}${BOLD}   Individual Tool Results:${NC}"
+echo -e "\n${CYN}${BOLD}   Individual Tool Results:${NC}"
 declare -A sources
 sources["$SUBF"]="Subfinder"
 sources["$ASSET"]="Assetfinder"
@@ -130,6 +183,8 @@ sources["$SUBL"]="Sublist3r"
 sources["$CRT"]="crt.sh"
 sources["$FINDO"]="Findomain"
 sources["$WARCH"]="Web Archive"
+sources["$BRUTE"]="PureDNS Brute"
+
 for file in "${!sources[@]}"; do
     if [[ -s "$file" ]]; then
         count=$(wc -l < "$file" | tr -d ' ')
@@ -138,7 +193,7 @@ for file in "${!sources[@]}"; do
 done
 
 stage "Merging, resolving, and checking live hosts"
-(cat "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$WARCH" | sort -u > "$OUTPUT") &
+(cat "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$WARCH" "$BRUTE" | sort -u > "$OUTPUT") &
 spinner_with_updates $! "Merging results"
 (dnsx -l "$OUTPUT" -silent -o "$RESOLVED" > /dev/null 2>&1) &
 spinner_with_updates $! "Resolving domains"
