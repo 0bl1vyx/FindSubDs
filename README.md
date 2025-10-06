@@ -37,13 +37,14 @@ The easiest way to install the required tools is through your system's package m
 This single command will install most of the required tools from the official repositories.
 
 ```bash
-sudo apt update && sudo apt install -y curl jq subfinder sublist3r assetfinder dnsx findomain
+sudo apt update && sudo apt install -y massdns curl jq subfinder sublist3r assetfinder dnsx findomain
 ```
 
-The `httpx` tool is best installed with `go` to ensure you have the latest version:
+The `httpx & puredns` tool is best installed with `go` to ensure you have the latest version:
 
 ```bash
 go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+go install github.com/d3mondev/puredns/v2@latest
 ```
 ---
 
