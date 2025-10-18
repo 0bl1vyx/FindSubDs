@@ -32,8 +32,8 @@ banner() {
     echo -e "${BLU}${BOLD}"
     echo '    ┌─┐┬ ┬┌┐ ┌─┐┌┬┐┌─┐┌─┐┌─┐'
     echo '    ├─┤└┬┘├┴┐└─┐ │ ├─┘┌─┘┌─┘'
-    echo '    ┴ ┴ ┴ └─┘└─┘ ┴ ┴  └─┘└─┘ v2.1'
-    echo -e "          ${NC}${CYN}by 0bl1vyx${NC}"
+    echo '    ┴ ┴ ┴ └─┘└─┘ ┴ ┴  └─┘└─┘ v2.3' # Incremented version
+    echo -e "         ${NC}${CYN}by 0bl1vyx${NC}"
 }
 
 stage() {
@@ -47,12 +47,12 @@ summary() {
     local duration=$4
 
     echo -e "\n${GRN}${BOLD}╭───────────────────────────────────────────────────╮${NC}"
-    echo -e "${GRN}${BOLD}│${NC}                ${WHT}🎉 Scan Summary 🎉${NC}                ${GRN}${BOLD}│${NC}"
+    echo -e "${GRN}${BOLD}│${NC}               ${WHT}🎉 Scan Summary 🎉${NC}               ${GRN}${BOLD}│${NC}"
     echo -e "${GRN}${BOLD}├───────────────────────────────────────────────────┤${NC}"
-    echo -e "${GRN}${BOLD}│${NC} ${CYN}⏱️  Run time:${NC}        ${WHT}${duration} seconds${NC}"
+    echo -e "${GRN}${BOLD}│${NC} ${CYN}⏱️  Run time:${NC}         ${WHT}${duration} seconds${NC}"
     echo -e "${GRN}${BOLD}│${NC} ${CYN}📦 Total subdomains:${NC} ${WHT}${total_subs}${NC}"
     echo -e "${GRN}${BOLD}│${NC} ${CYN}🌐 Live subdomains:${NC}  ${WHT}${live_subs}${NC}"
-    echo -e "${GRN}${BOLD}│${NC} ${CYN}💾 Output files:${NC}      ${YLW}${output_file}, ${LIVEOUT}${NC}"
+    echo -e "${GRN}${BOLD}│${NC} ${CYN}💾 Output files:${NC}     ${YLW}${output_file}, ${LIVEOUT}${NC}"
     echo -e "${GRN}${BOLD}╰───────────────────────────────────────────────────╯${NC}\n"
 }
 
@@ -60,29 +60,32 @@ usage() {
     banner
     echo -e "\n${WHT}A fast, parallel subdomain enumeration script that combines passive and active techniques.${NC}"
     echo -e "\n${BOLD}USAGE:${NC}"
-    echo -e "  $0 -d <domain> -o <all_subs.txt> -l <live_subs.txt> [OPTIONS]"
+    echo -e "   $0 -d <domain> -o <all_subs.txt> -l <live_subs.txt> [OPTIONS]"
     echo -e "\n${BOLD}REQUIRED ARGUMENTS:${NC}"
-    echo -e "  ${YLW}-d${NC}    Target domain (e.g., example.com)"
-    echo -e "  ${YLW}-o${NC}    Output file for all unique subdomains found"
-    echo -e "  ${YLW}-l${NC}    Output file for live subdomains (responding to HTTP/S)"
-    echo -e "\n${BOLD}OPTIONAL ARGUMENTS (for Brute-Forcing):${NC}"
-    echo -e "  ${YLW}-w${NC}    Path to a wordlist for subdomain brute-forcing with puredns"
-    echo -e "  ${YLW}-r${NC}    Path to a file of valid DNS resolvers for puredns"
-    echo -e "  ${YLW}-h${NC}    Display this help menu and exit"
+    echo -e "   ${YLW}-d${NC}    Target domain (e.g., example.com)"
+    echo -e "   ${YLW}-o${NC}    Output file for all unique subdomains found"
+    echo -e "   ${YLW}-l${NC}    Output file for live subdomains (responding to HTTP/S)"
+    echo -e "\n${BOLD}OPTIONAL ARGUMENTS:${NC}"
+    echo -e "   ${YLW}-w${NC}    Path to a wordlist for subdomain brute-forcing with puredns"
+    echo -e "   ${YLW}-r${NC}    Path to a file of valid DNS resolvers for puredns"
+    echo -e "   ${YLW}-p${NC}    Run permutations with alterx (Very Time Cosuming)"
+    echo -e "   ${YLW}-h${NC}    Display this help menu and exit"
     echo -e "\n${BOLD}EXAMPLE:${NC}"
-    echo -e "  ${CYN}$0 -d example.com -o subs.txt -l live.txt -w /path/to/words.txt -r /path/to/resolvers.txt${NC}\n"
+    echo -e "   ${CYN}$0 -d example.com -o subs.txt -l live.txt -w /path/to/words.txt -r /path/to/resolvers.txt -p${NC}\n"
     exit 1
 }
 
 
 # --- Argument Parsing ---
-while getopts "d:o:l:w:r:h" opt; do
+PERMUTE_FLAG=0 # Initialize permutation flag
+while getopts "d:o:l:w:r:ph" opt; do
   case $opt in
     d) DOMAIN=$OPTARG ;;
     o) OUTPUT=$OPTARG ;;
     l) LIVEOUT=$OPTARG ;;
     w) WORDLIST=$OPTARG ;;
     r) RESOLVERS=$OPTARG ;;
+    p) PERMUTE_FLAG=1 ;;
     h) usage ;;
     *) usage ;;
   esac
@@ -91,7 +94,7 @@ done
 # --- Prerequisite Checks ---
 
 # Check for required tools
-for tool in subfinder assetfinder sublist3r dnsx httpx findomain jq curl puredns; do
+for tool in subfinder assetfinder sublist3r dnsx httpx findomain jq curl puredns alterx; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo -e "${RED}${BOLD}[✘] Tool missing: ${tool}. Please install it first.${NC}"
     exit 1
@@ -135,9 +138,14 @@ banner
 
 echo -e "\n${WHT}${BOLD}TARGET:${NC} ${YLW}$DOMAIN${NC}"
 echo -e "${WHT}${BOLD}OUTPUT:${NC} ${YLW}$OUTPUT${NC} | ${WHT}${BOLD}LIVE:${NC} ${YLW}$LIVEOUT${NC}"
+MODE="Passive"
 if [[ -n "$WORDLIST" ]]; then
-    echo -e "${WHT}${BOLD}MODE:${NC}   ${YLW}Passive + Brute-Force${NC}"
+    MODE="Passive + Brute-Force"
 fi
+if [[ "$PERMUTE_FLAG" -eq 1 ]]; then
+    MODE="${MODE} + Permutations"
+fi
+echo -e "${WHT}${BOLD}MODE:${NC}   ${YLW}${MODE}${NC}"
 
 
 # Temp files
@@ -149,8 +157,9 @@ CRT=$(mktemp)
 WARCH=$(mktemp)
 BRUTE=$(mktemp)
 RESOLVED=$(mktemp)
+PERMUTE_OUT=$(mktemp) # Temp file for permutation results
 
-trap 'rm -f "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$WARCH" "$BRUTE" "$RESOLVED"; tput cnorm' EXIT
+trap 'rm -f "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$WARCH" "$BRUTE" "$RESOLVED" "$PERMUTE_OUT"; tput cnorm' EXIT
 
 stage "Running passive enumeration tools in parallel"
 (
@@ -165,6 +174,26 @@ stage "Running passive enumeration tools in parallel"
 spinner_with_updates $! "Passive Enumeration"
 echo -e "${GRN}${BOLD}└── Done.${NC}"
 
+# --- [NEW BLOCK] ---
+# Show passive results immediately
+echo -e "\n${CYN}${BOLD}   Passive Tool Results:${NC}"
+declare -A passive_sources
+passive_sources["$SUBF"]="Subfinder"
+passive_sources["$ASSET"]="Assetfinder"
+passive_sources["$SUBL"]="Sublist3r"
+passive_sources["$CRT"]="crt.sh"
+passive_sources["$FINDO"]="Findomain"
+passive_sources["$WARCH"]="Web Archive"
+
+for file in "${!passive_sources[@]}"; do
+    if [[ -s "$file" ]]; then # Check if file has content
+        count=$(wc -l < "$file" | tr -d ' ')
+        printf "   ${BLU}├── ${WHT}%-15s${NC}: %s results\n" "${passive_sources[$file]}" "$count"
+    fi
+done
+# --- [END NEW BLOCK] ---
+
+
 # --- Brute-forcing (Optional) ---
 if [[ -n "$WORDLIST" && -n "$RESOLVERS" ]]; then
   stage "Running puredns for brute-force enumeration"
@@ -174,27 +203,43 @@ if [[ -n "$WORDLIST" && -n "$RESOLVERS" ]]; then
 fi
 
 
-# --- UX IMPROVEMENT: Tree-style progress report ---
-echo -e "\n${CYN}${BOLD}   Individual Tool Results:${NC}"
-declare -A sources
-sources["$SUBF"]="Subfinder"
-sources["$ASSET"]="Assetfinder"
-sources["$SUBL"]="Sublist3r"
-sources["$CRT"]="crt.sh"
-sources["$FINDO"]="Findomain"
-sources["$WARCH"]="Web Archive"
-sources["$BRUTE"]="PureDNS Brute"
+# --- [MODIFIED BLOCK] ---
+# Show only Brute-Force results here
+echo -e "\n${CYN}${BOLD}   Brute-Force Tool Results:${NC}"
+declare -A active_sources
+active_sources["$BRUTE"]="PureDNS Brute"
 
-for file in "${!sources[@]}"; do
-    if [[ -s "$file" ]]; then
+for file in "${!active_sources[@]}"; do
+    if [[ -s "$file" ]]; then # This check is key, it only runs if brute-force ran and found things
         count=$(wc -l < "$file" | tr -d ' ')
-        printf "   ${BLU}├── ${WHT}%-15s${NC}: %s results\n" "${sources[$file]}" "$count"
+        printf "   ${BLU}├── ${WHT}%-15s${NC}: %s results\n" "${active_sources[$file]}" "$count"
     fi
 done
+# --- [END MODIFIED BLOCK] ---
 
-stage "Merging, resolving, and checking live hosts"
+
+stage "Merging initial results"
 (cat "$SUBF" "$ASSET" "$SUBL" "$CRT" "$FINDO" "$WARCH" "$BRUTE" | sort -u > "$OUTPUT") &
 spinner_with_updates $! "Merging results"
+echo -e "${GRN}${BOLD}└── Done.${NC}"
+
+
+# --- Permutations (Optional) ---
+if [[ "$PERMUTE_FLAG" -eq 1 ]]; then
+  stage "Running permutations with alterx"
+  (cat "$OUTPUT" | alterx -silent | dnsx -silent | sort -u > "$PERMUTE_OUT") &
+  spinner_with_updates $! "Running alterx & dnsx"
+  
+  perm_count=$(wc -l < "$PERMUTE_OUT" | tr -d ' ')
+  echo -e "${GRN}${BOLD}└── Found ${perm_count} potential permutations.${NC}"
+  
+  (cat "$PERMUTE_OUT" >> "$OUTPUT"; sort -u "$OUTPUT" -o "$OUTPUT") &
+  spinner_with_updates $! "Merging permutation results"
+  echo -e "${GRN}${BOLD}└── Done.${NC}"
+fi
+
+
+stage "Resolving final list and checking live hosts"
 (dnsx -l "$OUTPUT" -silent -o "$RESOLVED" > /dev/null 2>&1) &
 spinner_with_updates $! "Resolving domains"
 (httpx -l "$RESOLVED" -silent -o "$LIVEOUT" > /dev/null 2>&1) &
