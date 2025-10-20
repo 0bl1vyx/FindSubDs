@@ -45,6 +45,7 @@ The `httpx & puredns` tool is best installed with `go` to ensure you have the la
 ```bash
 go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
 go install github.com/d3mondev/puredns/v2@latest
+go install github.com/projectdiscovery/alterx/cmd/alterx@latest
 ```
 ---
 
