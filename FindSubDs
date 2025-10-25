@@ -32,7 +32,7 @@ banner() {
     echo -e "${BLU}${BOLD}"
     echo '    ┌─┐┬ ┬┌┐ ┌─┐┌┬┐┌─┐┌─┐┌─┐'
     echo '    ├─┤└┬┘├┴┐└─┐ │ ├─┘┌─┘┌─┘'
-    echo '    ┴ ┴ ┴ └─┘└─┘ ┴ ┴  └─┘└─┘ v2.7' # Version bump
+    echo '    ┴ ┴ ┴ └─┘└─┘ ┴ ┴  └─┘└─┘ v2.8' # Version bump for scope fix
     echo -e "         ${NC}${CYN}by 0bl1vyx${NC}"
 }
 
@@ -47,10 +47,10 @@ summary() {
     local duration=$4
 
     echo -e "\n${GRN}${BOLD}╭───────────────────────────────────────────────────╮${NC}"
-    echo -e "${GRN}${BOLD}│${NC}                ${WHT}🎉 Scan Summary 🎉${NC}                ${GRN}${BOLD}│${NC}"
+    echo -e "${GRN}${BOLD}│${NC}                 ${WHT}🎉 Scan Summary 🎉${NC}                 ${GRN}${BOLD}│${NC}"
     echo -e "${GRN}${BOLD}├───────────────────────────────────────────────────┤${NC}"
-    echo -e "${GRN}${BOLD}│${NC} ${CYN}⏱️  Run time:${NC}       ${WHT}${duration} seconds${NC}"
-    echo -e "${GRN}${BOLD}│${NC} ${CYN}📦 Total subdomains:${NC} ${WHT}${total_subs}${NC}"
+    echo -e "${GRN}${BOLD}│${NC} ${CYN}⏱️  Run time:${NC}         ${WHT}${duration} seconds${NC}"
+    echo -e "${GRN}${BOLD}│${NC} ${CYN}📦 In-scope domains:${NC} ${WHT}${total_subs}${NC}"
     echo -e "${GRN}${BOLD}│${NC} ${CYN}🌐 Live subdomains:${NC}  ${WHT}${live_subs}${NC}"
     echo -e "${GRN}${BOLD}│${NC} ${CYN}💾 Output files:${NC}     ${YLW}${output_file}, ${LIVEOUT}${NC}"
     echo -e "${GRN}${BOLD}╰───────────────────────────────────────────────────╯${NC}\n"
@@ -63,12 +63,12 @@ usage() {
     echo -e "    $0 -d <domain> -o <all_subs.txt> -l <live_subs.txt> [OPTIONS]"
     echo -e "\n${BOLD}REQUIRED ARGUMENTS:${NC}"
     echo -e "    ${YLW}-d${NC}    Target domain (e.g., example.com)"
-    echo -e "    ${YLW}-o${NC}    Output file for all unique subdomains found"
+    echo -e "    ${YLW}-o${NC}    Output file for all unique, in-scope subdomains found"
     echo -e "    ${YLW}-l${NC}    Output file for live subdomains (responding to HTTP/S)"
     echo -e "\n${BOLD}OPTIONAL ARGUMENTS:${NC}"
     echo -e "    ${YLW}-w${NC}    Path to a wordlist for subdomain brute-forcing with puredns"
     echo -e "    ${YLW}-r${NC}    Path to a file of valid DNS resolvers for puredns"
-    echo -e "    ${YLW}-p${NC}    Run permutations with alterx (Very Time Cosuming)"
+    echo -e "    ${YLW}-p${NC}    Run permutations with alterx (Very Time Consuming)"
     echo -e "    ${YLW}-v${NC}    Verbose mode. Disables spinners and shows tool output."
     echo -e "    ${YLW}-h${NC}    Display this help menu and exit"
     echo -e "\n${BOLD}EXAMPLE:${NC}"
@@ -96,7 +96,7 @@ done
 
 # --- Prerequisite Checks ---
 
-for tool in subfinder findomain dnsx httpx puredns alterx comm sort; do
+for tool in subfinder findomain dnsx httpx puredns alterx comm sort grep mv; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo -e "${RED}${BOLD}[✘] Tool missing: ${tool}. Please install it first.${NC}"
     exit 1
@@ -161,11 +161,12 @@ RESOLVED=$(mktemp)
 PERMUTE_OUT=$(mktemp)
 ALREADY_RESOLVED=$(mktemp)
 NEEDS_RESOLUTION=$(mktemp)
+FILTERED_OUTPUT=$(mktemp) # <-- NEW: For final filtering
 
-trap 'rm -f "$SUBF" "$FINDO" "$BRUTE" "$RESOLVED" "$PERMUTE_OUT" "$ALREADY_RESOLVED" "$NEEDS_RESOLUTION"; tput cnorm' EXIT
+trap 'rm -f "$SUBF" "$FINDO" "$BRUTE" "$RESOLVED" "$PERMUTE_OUT" "$ALREADY_RESOLVED" "$NEEDS_RESOLUTION" "$FILTERED_OUTPUT"; tput cnorm' EXIT
 
 
-# --- [MODIFIED BLOCK 1: Passive] ---
+# --- [BLOCK 1: Passive] ---
 stage "Running passive enumeration tools in parallel"
 if [[ "$VERBOSE_FLAG" -eq 1 ]]; then
     echo -e "${YLW}${BOLD}[v] VERBOSE MODE: Running tools in foreground, showing output...${NC}"
@@ -174,10 +175,6 @@ if [[ "$VERBOSE_FLAG" -eq 1 ]]; then
         subfinder -d "$DOMAIN" -all -o "$SUBF" &
         
         echo "[v] Starting findomain..."
-        # --- FIX: Removed -q and -o, using stdout redirection ---
-        # This is more compatible with different findomain versions.
-        # stdout (subdomains) goes to the file.
-        # stderr (banner/errors) goes to your screen.
         findomain -t "$DOMAIN" > "$FINDO" &
         wait
     )
@@ -185,10 +182,6 @@ if [[ "$VERBOSE_FLAG" -eq 1 ]]; then
 else
     (
         subfinder -d "$DOMAIN" -all -silent -o "$SUBF" > /dev/null 2>&1 &
-        
-        # --- FIX: Removed -q and -o, using stdout redirection ---
-        # stdout (subdomains) goes to the file.
-        # stderr (banner/errors) goes to /dev/null.
         findomain -t "$DOMAIN" > "$FINDO" 2>/dev/null &
         wait
     ) &
@@ -210,7 +203,7 @@ for file in "${!passive_sources[@]}"; do
 done
 
 
-# --- [MODIFIED BLOCK 2: Brute-force] ---
+# --- [BLOCK 2: Brute-force] ---
 if [[ -n "$WORDLIST" && -n "$RESOLVERS" ]]; then
   stage "Running puredns for brute-force enumeration"
   if [[ "$VERBOSE_FLAG" -eq 1 ]]; then
@@ -232,7 +225,7 @@ if [[ -s "$BRUTE" ]]; then
 fi
 
 
-# --- [MODIFIED BLOCK 3: Merge] ---
+# --- [BLOCK 3: Merge] ---
 stage "Merging initial results"
 if [[ "$VERBOSE_FLAG" -eq 1 ]]; then
     echo -e "${YLW}${BOLD}[v] Merging results...${NC}"
@@ -245,13 +238,17 @@ echo -e "${GRN}${BOLD}└── Done.${NC}"
 
 
 # --- [MODIFIED BLOCK 4: Permutations] ---
+# We now filter the input to alterx to *only* include in-scope domains.
 if [[ "$PERMUTE_FLAG" -eq 1 ]]; then
   stage "Running permutations with alterx"
   if [[ "$VERBOSE_FLAG" -eq 1 ]]; then
+      echo -e "${YLW}${BOLD}[v] Filtering for in-scope domains to feed alterx...${NC}"
       echo -e "${YLW}${BOLD}[v] Running alterx & dnsx, showing output...${NC}"
-      cat "$OUTPUT" | alterx | dnsx | sort -u > "$PERMUTE_OUT"
+      # --- FIX: Pipe only in-scope domains to alterx ---
+      grep -iE "(\.$DOMAIN$|^$DOMAIN$)" "$OUTPUT" | alterx | dnsx | sort -u > "$PERMUTE_OUT"
   else
-      (cat "$OUTPUT" | alterx -silent | dnsx -silent | sort -u > "$PERMUTE_OUT") &
+      # --- FIX: Pipe only in-scope domains to alterx ---
+      (grep -iE "(\.$DOMAIN$|^$DOMAIN$)" "$OUTPUT" | alterx -silent | dnsx -silent | sort -u > "$PERMUTE_OUT") &
       spinner_with_updates $! "Running alterx & dnsx"
   fi
   
@@ -264,16 +261,35 @@ if [[ "$PERMUTE_FLAG" -eq 1 ]]; then
 fi
 
 
+# --- [NEW BLOCK 4.5: Final Scoping] ---
+# This is the main fix. We filter the *entire* list to ensure only
+# true subdomains of the target are kept before resolution.
+stage "Filtering for in-scope domains"
+if [[ "$VERBOSE_FLAG" -eq 1 ]]; then
+    echo -e "${YLW}${BOLD}[v] Filtering all results to match target scope: $DOMAIN${NC}"
+    grep -iE "(\.$DOMAIN$|^$DOMAIN$)" "$OUTPUT" | sort -u > "$FILTERED_OUTPUT"
+    mv "$FILTERED_OUTPUT" "$OUTPUT"
+else
+    (grep -iE "(\.$DOMAIN$|^$DOMAIN$)" "$OUTPUT" | sort -u > "$FILTERED_OUTPUT" && mv "$FILTERED_OUTPUT" "$OUTPUT") &
+    spinner_with_updates $! "Enforcing target scope"
+fi
+scope_count=$(wc -l < "$OUTPUT" | tr -d ' ')
+echo -e "${GRN}${BOLD}└── ${scope_count} in-scope domains identified.${NC}"
+
+
 # --- [MODIFIED BLOCK 5: Smart Resolution] ---
+# This block's logic is now correct because $OUTPUT is pre-filtered.
+# $ALREADY_RESOLVED is also clean because $BRUTE and $PERMUTE_OUT
+# were generated from scoped inputs.
 stage "Optimizing resolution and checking live hosts"
 if [[ "$VERBOSE_FLAG" -eq 1 ]]; then
     echo -e "${YLW}${BOLD}[v] Consolidating known-resolved...${NC}"
     cat "$BRUTE" "$PERMUTE_OUT" | sort -u > "$ALREADY_RESOLVED"
     
-    echo -e "${YLW}${BOLD}[v] Finding domains that need resolution...${NC}"
+    echo -e "${YLW}${BOLD}[v] Finding passive domains that need resolution...${NC}"
     comm -23 <(sort "$OUTPUT") "$ALREADY_RESOLVED" > "$NEEDS_RESOLUTION"
     
-    echo -e "${YLW}${BOLD}[v] Resolving remaining domains...${NC}"
+    echo -e "${YLW}${BOLD}[v] Resolving remaining passive domains...${NC}"
     dnsx -l "$NEEDS_RESOLUTION" -o "$RESOLVED" # No -silent
     
     echo -e "${YLW}${BOLD}[v] Checking live hosts...${NC}"
