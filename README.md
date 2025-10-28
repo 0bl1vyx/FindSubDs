@@ -40,9 +40,6 @@ FindSubDs relies on a set of powerful Go-based tools. You must install: `subfind
 This method ensures you have the latest versions of all tools. You must have [Go installed](https://go.dev/doc/install) and configured.
 
 ```bash
-go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-go install -v github.com/findomain/findomain@latest
-go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest
 go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
 go install -v github.com/d3mondev/puredns/v2@latest
 go install -v github.com/projectdiscovery/alterx/cmd/alterx@latest
@@ -53,7 +50,7 @@ go install -v github.com/projectdiscovery/alterx/cmd/alterx@latest
 You can use `apt` to install the tools, though the versions in the official repositories may be older.
 
 ```bash
-sudo apt update && sudo apt install -y subfinder findomain dnsx httpx puredns alterx
+sudo apt update && sudo apt install -y subfinder findomain dnsx curl jq wget
 ```
 
 -----
